@@ -1,0 +1,883 @@
+# Application Design Document
+
+## 1. Overview
+
+### 1.1 Application Name
+
+**Video Stitcher**
+
+### 1.2 Purpose
+
+The application is a web-based tool that allows users to combine multiple video files into a single video file.
+
+The application runs entirely in the user's web browser. No backend server is required for processing, storing, or uploading videos. Video files are selected from the user's local computer and processed locally in the browser.
+
+The primary workflow is:
+
+1. Drag video files into the application.
+2. Videos appear in an ordered list.
+3. Reorder videos using drag and drop.
+4. Duplicate individual videos in the list when required.
+5. Stitch the videos together.
+6. Download the resulting combined video.
+
+### 1.3 Goals
+
+The application should:
+
+* Provide a simple, intuitive interface.
+* Allow videos to be added using drag and drop.
+* Preserve the order in which videos are displayed.
+* Allow users to freely reorder videos.
+* Allow individual videos to be duplicated.
+* Combine multiple videos into one output video.
+* Perform processing locally in the browser.
+* Avoid uploading video files to a server.
+* Provide clear progress and error feedback.
+* Allow the final video to be downloaded to the user's computer.
+
+### 1.4 Non-Goals
+
+The initial version will not provide:
+
+* User accounts.
+* Cloud storage.
+* Video sharing.
+* Server-side processing.
+* Video editing such as trimming or cutting.
+* Transitions or effects.
+* Audio editing.
+* Subtitles.
+* Video filters.
+* Multi-user collaboration.
+
+These features may be considered for future versions.
+
+---
+
+# 2. High-Level Architecture
+
+The application is a client-side web application.
+
+```text
++-------------------------------------------------------+
+|                    Web Browser                        |
+|                                                       |
+|  +------------------+    +-------------------------+  |
+|  | User Interface   |    | Video Processing Engine |  |
+|  |                  |    |                         |  |
+|  | Drop Zone        |    | Decode / Encode         |  |
+|  | Video List       |--->| Video Stitching         |  |
+|  | Reordering       |    | Progress Reporting      |  |
+|  | Duplicate        |    |                         |  |
+|  | Stitch Button    |    +-------------------------+  |
+|  +------------------+              |                 |
+|                                    v                 |
+|                           +-----------------+         |
+|                           | Output Video    |         |
+|                           | Blob / File     |         |
+|                           +-----------------+         |
+|                                    |                 |
+|                                    v                 |
+|                             User Download            |
++-------------------------------------------------------+
+```
+
+There is no application backend.
+
+All video files remain on the user's device.
+
+---
+
+# 3. Technology Architecture
+
+The application should use standard browser technologies where possible.
+
+### 3.1 Frontend
+
+Recommended technologies:
+
+* HTML
+* CSS
+* TypeScript
+* A modern frontend framework such as React, Vue, or Svelte
+
+The frontend is responsible for:
+
+* Rendering the user interface.
+* Managing the video list.
+* Handling drag and drop.
+* Managing application state.
+* Starting and monitoring video processing.
+* Displaying progress.
+* Initiating the final download.
+
+### 3.2 Video Processing
+
+Video processing is the technically most important part of the application.
+
+A browser-compatible video processing solution should be used to decode and encode video files. A suitable implementation could use **FFmpeg compiled to WebAssembly (FFmpeg.wasm)**.
+
+Processing should happen inside the browser.
+
+```text
+Input Files
+    |
+    v
+Browser File API
+    |
+    v
+Video Processing Engine
+    |
+    +---- Decode
+    |
+    +---- Normalize
+    |
+    +---- Concatenate
+    |
+    +---- Encode
+    |
+    v
+Output Blob
+    |
+    v
+Download
+```
+
+Web Workers should be considered so that intensive video processing does not block the main browser UI.
+
+---
+
+# 4. Functional Requirements
+
+## FR-001. Add Videos
+
+The user shall be able to add video files by dragging them into the application.
+
+The application shall also provide a file-selection mechanism as an alternative to drag and drop.
+
+Supported files should initially include common video formats such as:
+
+* MP4
+* WebM
+* MOV
+* MKV, subject to browser/processing-engine support
+
+The application shall validate files before adding them to the list.
+
+Invalid files shall be rejected with an appropriate error message.
+
+---
+
+## FR-002. Display Video List
+
+Added videos shall appear in an ordered list.
+
+Each list element should display:
+
+* Video filename
+* Video thumbnail where available
+* Video duration
+* Video format
+* Optional file size
+* Position in the sequence
+* Duplicate action
+* Remove action
+
+Example:
+
+```text
+┌─────────────────────────────────────────────────────┐
+│  1  [thumbnail]  intro.mp4                         │
+│                 00:12                 Duplicate ✕  │
+├─────────────────────────────────────────────────────┤
+│  2  [thumbnail]  interview.mp4                     │
+│                 03:45                 Duplicate ✕  │
+├─────────────────────────────────────────────────────┤
+│  3  [thumbnail]  outro.mp4                         │
+│                 00:20                 Duplicate ✕  │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## FR-003. Reorder Videos
+
+The user shall be able to reorder videos by dragging list elements.
+
+The new order shall immediately become the sequence used for stitching.
+
+Example:
+
+```text
+Before:
+
+1. Intro
+2. Interview
+3. Outro
+
+After dragging Interview below Outro:
+
+1. Intro
+2. Outro
+3. Interview
+```
+
+The interface should provide visual feedback while an item is being dragged.
+
+---
+
+## FR-004. Duplicate Video
+
+Each video list element shall provide a duplicate action.
+
+When duplicated, a new list element shall be created using the same underlying video file.
+
+Example:
+
+```text
+Before:
+
+1. Intro
+2. Interview
+3. Outro
+
+Duplicate Interview:
+
+1. Intro
+2. Interview
+3. Interview
+4. Outro
+```
+
+The duplicate should normally be inserted immediately after the original item.
+
+The duplicated item should behave independently in the list, meaning either copy can subsequently be moved or removed.
+
+---
+
+## FR-005. Remove Video
+
+Each video shall have a remove action.
+
+Removing a video shall remove it from the stitching sequence.
+
+The original local file shall not be deleted from the user's computer.
+
+---
+
+## FR-006. Stitch Videos
+
+The user shall be able to start stitching using a prominent **Stitch Videos** button.
+
+The button should be disabled when there are fewer than two videos.
+
+When stitching starts:
+
+* The video list should become read-only or otherwise prevent conflicting modifications.
+* Processing progress should be displayed.
+* The user should be informed that processing is occurring locally.
+* The UI should remain responsive where technically possible.
+
+---
+
+## FR-007. Processing Progress
+
+The application shall display processing progress.
+
+For example:
+
+```text
+Stitching videos...
+
+████████████████░░░░  78%
+
+Processing video 3 of 4
+```
+
+If accurate percentage progress cannot be calculated for a particular processing stage, the application may instead display an indeterminate progress indicator and a descriptive status.
+
+Possible statuses:
+
+* Preparing videos
+* Loading video files
+* Processing video 1 of 4
+* Encoding output
+* Finalizing video
+* Complete
+
+---
+
+## FR-008. Download Result
+
+After successful processing, the application shall provide a download button.
+
+Example:
+
+```text
+✓ Video stitching complete
+
+Output:
+stitched-video.mp4
+
+[ Download Video ]
+```
+
+The generated file should be downloaded directly to the user's device.
+
+---
+
+# 5. User Interface
+
+## 5.1 Main Screen
+
+The main application screen should consist of four major areas:
+
+```text
++-------------------------------------------------------+
+|                    Video Stitcher                     |
+|                                                       |
+|  Drag and drop videos here                           |
+|  or                                                   |
+|  [ Select Videos ]                                    |
+|                                                       |
++-------------------------------------------------------+
+|                                                       |
+|  Video Sequence                                       |
+|                                                       |
+|  1. Video A.mp4       [Duplicate] [Remove]            |
+|  2. Video B.mp4       [Duplicate] [Remove]            |
+|  3. Video C.mp4       [Duplicate] [Remove]            |
+|                                                       |
+|                 [ Stitch Videos ]                     |
+|                                                       |
++-------------------------------------------------------+
+|                                                       |
+|  Processing / Result                                  |
+|                                                       |
++-------------------------------------------------------+
+```
+
+## 5.2 Empty State
+
+When no videos have been added, the application should show a clear drop zone.
+
+Example:
+
+> Drag and drop your videos here
+
+and:
+
+> Or select videos from your computer
+
+The empty state should explain that files are processed locally.
+
+---
+
+# 6. Application State
+
+The application should maintain a list of video items.
+
+Conceptually:
+
+```typescript
+VideoItem {
+    id: string
+    file: File
+    name: string
+    size: number
+    type: string
+    duration?: number
+    thumbnail?: string
+}
+```
+
+The application state may contain:
+
+```typescript
+ApplicationState {
+    videos: VideoItem[]
+    status: "idle" | "preparing" | "processing" | "complete" | "error"
+    progress: number
+    outputFile?: Blob
+    error?: string
+}
+```
+
+Each list item should have its own unique ID.
+
+This is particularly important when duplicating files. Two entries may reference the same underlying `File` object but must still be independently movable and removable.
+
+---
+
+# 7. Drag and Drop
+
+The application shall support two different drag-and-drop interactions.
+
+### 7.1 Adding Files
+
+The user can drag files from the operating system into the application's drop zone.
+
+```text
+Operating System
+      |
+      | drag video files
+      v
++-------------------+
+|   Drop Zone       |
++-------------------+
+```
+
+### 7.2 Reordering Items
+
+The user can drag an existing video list item to another position.
+
+```text
+Video A
+Video B  <--- dragging
+Video C
+
+        ↓
+
+Video B
+Video A
+Video C
+```
+
+The two interactions should be visually distinguishable to avoid confusion.
+
+---
+
+# 8. Video Processing Design
+
+## 8.1 General Strategy
+
+The stitching process should produce one output video from the ordered list.
+
+Conceptually:
+
+```text
+Video 1 ─┐
+Video 2 ─┤
+Video 3 ─┼──> Processing ──> Output Video
+Video 4 ─┘
+```
+
+The processing pipeline may need to normalize input videos before concatenation.
+
+Videos can differ in:
+
+* Resolution
+* Frame rate
+* Video codec
+* Audio codec
+* Audio sample rate
+* Pixel format
+* Container format
+
+For reliable output, the processing pipeline should normalize incompatible parameters before or during concatenation.
+
+---
+
+# 9. Performance Considerations
+
+Video processing is computationally expensive.
+
+The application should therefore:
+
+* Use Web Workers where possible.
+* Avoid unnecessarily copying video data in memory.
+* Release temporary object URLs when they are no longer needed.
+* Release processing resources after completion.
+* Avoid loading all decoded video frames into JavaScript memory.
+* Provide progress feedback.
+* Handle large files gracefully.
+
+The application should warn users that very large videos may require significant memory and processing time.
+
+---
+
+# 10. Error Handling
+
+The application shall handle common errors gracefully.
+
+Examples include:
+
+### Invalid File
+
+> This file is not a supported video format.
+
+### Processing Failure
+
+> The video could not be processed. Please verify that the file is valid and try again.
+
+### Insufficient Resources
+
+> The browser does not have enough resources to process these videos. Try using fewer or smaller videos.
+
+### User Cancels Processing
+
+If cancellation is supported:
+
+> Video processing cancelled.
+
+The user should be able to return to the video list without losing the selected sequence.
+
+---
+
+# 11. Privacy
+
+A core design principle is that videos do not need to leave the user's device.
+
+The application should clearly communicate:
+
+> Your videos are processed locally in your browser. They are not uploaded to a server.
+
+No video content should be sent to an application backend.
+
+Analytics, if introduced later, should not collect video content or filenames unless explicitly required and consented to.
+
+---
+
+# 12. Browser Compatibility
+
+The application should target modern desktop browsers.
+
+Initial target:
+
+* Google Chrome
+* Microsoft Edge
+* Mozilla Firefox
+* Safari
+
+The application should detect unsupported browser capabilities and display an appropriate message.
+
+Mobile browser support is not a primary requirement for the initial version because drag-and-drop file management and video processing can be significantly more difficult on mobile devices.
+
+---
+
+# 13. Security Considerations
+
+Since files are processed locally, the application's attack surface is reduced compared with a server-side video processing service.
+
+Nevertheless:
+
+* File names must be treated as untrusted input.
+* File metadata must not be injected directly into HTML.
+* Temporary browser resources should be cleaned up.
+* Third-party processing libraries should be kept up to date.
+* The application should not execute content from uploaded files as application code.
+
+---
+
+# 14. Accessibility
+
+The application should support keyboard and assistive-technology users where possible.
+
+Drag-and-drop reordering should have a keyboard-accessible alternative.
+
+For example:
+
+```text
+Move up
+Move down
+```
+
+buttons can be provided in addition to drag-and-drop.
+
+All buttons should have accessible labels.
+
+Progress information should be exposed to assistive technologies.
+
+---
+
+# 15. Proposed User Flow
+
+```text
+                    Start
+                      |
+                      v
+             +----------------+
+             | Add videos     |
+             +----------------+
+                      |
+                      v
+             +----------------+
+             | Video list     |
+             +----------------+
+                      |
+             +--------+--------+
+             |        |        |
+             v        v        v
+          Reorder  Duplicate  Remove
+             |        |        |
+             +--------+--------+
+                      |
+                      v
+             +----------------+
+             | Stitch Videos  |
+             +----------------+
+                      |
+                      v
+             +----------------+
+             | Processing     |
+             +----------------+
+                      |
+                 +----+----+
+                 |         |
+              Success    Error
+                 |         |
+                 v         v
+             Download    Retry
+```
+
+---
+
+# 16. Component Structure
+
+A possible frontend component structure is:
+
+```text
+App
+├── Header
+├── VideoDropZone
+├── VideoList
+│   └── VideoListItem
+│       ├── VideoThumbnail
+│       ├── VideoMetadata
+│       ├── DuplicateButton
+│       ├── RemoveButton
+│       └── ReorderControls
+├── StitchControls
+├── ProcessingStatus
+└── ResultPanel
+```
+
+### VideoDropZone
+
+Responsible for:
+
+* File drag-and-drop.
+* File selection.
+* File validation.
+* Adding files to application state.
+
+### VideoList
+
+Responsible for:
+
+* Rendering the ordered list.
+* Reordering items.
+* Displaying the empty state.
+
+### VideoListItem
+
+Responsible for:
+
+* Displaying video information.
+* Duplicate action.
+* Remove action.
+* Dragging/reordering.
+
+### StitchControls
+
+Responsible for:
+
+* Starting the stitching process.
+* Disabling controls during processing.
+
+### ProcessingStatus
+
+Responsible for:
+
+* Progress.
+* Current processing stage.
+* Errors.
+* Cancellation.
+
+### ResultPanel
+
+Responsible for:
+
+* Displaying completion status.
+* Providing the output filename.
+* Providing the download action.
+
+---
+
+# 17. Example Application Sequence
+
+A typical user interaction might look like this:
+
+### Step 1
+
+The user opens the application.
+
+The application displays an empty drop zone.
+
+### Step 2
+
+The user drags four videos into the drop zone.
+
+The application creates four video list items.
+
+```text
+1. intro.mp4
+2. scene-a.mp4
+3. scene-b.mp4
+4. outro.mp4
+```
+
+### Step 3
+
+The user drags `scene-b.mp4` above `scene-a.mp4`.
+
+The list becomes:
+
+```text
+1. intro.mp4
+2. scene-b.mp4
+3. scene-a.mp4
+4. outro.mp4
+```
+
+### Step 4
+
+The user duplicates `scene-a.mp4`.
+
+The list becomes:
+
+```text
+1. intro.mp4
+2. scene-b.mp4
+3. scene-a.mp4
+4. scene-a.mp4
+5. outro.mp4
+```
+
+### Step 5
+
+The user clicks **Stitch Videos**.
+
+The application starts local processing.
+
+### Step 6
+
+The application displays progress.
+
+```text
+Stitching videos...
+
+Processing 3 of 5
+██████████████░░░░░░
+```
+
+### Step 7
+
+Processing completes.
+
+```text
+✓ Stitching complete
+
+[ Download stitched-video.mp4 ]
+```
+
+### Step 8
+
+The user downloads the resulting video.
+
+---
+
+# 18. MVP Scope
+
+The first version should focus on the smallest useful feature set.
+
+### Required
+
+* [x] Browser-based application
+* [x] No backend
+* [x] Drag and drop video files
+* [x] Display ordered video list
+* [x] Reorder videos
+* [x] Duplicate videos
+* [x] Remove videos
+* [x] Stitch videos
+* [x] Processing progress
+* [x] Download result
+* [x] Local video processing
+* [x] Error handling
+
+### Optional for MVP
+
+* Video thumbnails
+* Video duration
+* Keyboard reorder controls
+* Cancel processing
+* Output filename configuration
+* Dark mode
+
+### Future Features
+
+Potential future extensions include:
+
+* Trim videos
+* Preview videos
+* Add transitions
+* Add background music
+* Adjust volume
+* Crop videos
+* Resize videos
+* Change output format
+* Change output quality
+* Add text overlays
+* Save/load projects
+* Timeline-based editing
+
+---
+
+# 19. Acceptance Criteria
+
+The MVP can be considered complete when:
+
+1. A user can open the application without creating an account.
+2. A user can drag video files into the application.
+3. Added videos appear in a clearly ordered list.
+4. The user can reorder videos using drag and drop.
+5. The user can duplicate a video list entry.
+6. The user can remove a video list entry.
+7. The stitching order exactly matches the current list order.
+8. The application processes videos without uploading them to a backend.
+9. The application provides meaningful progress information.
+10. A successfully stitched video can be downloaded.
+11. Processing failures are communicated clearly.
+12. The application remains usable for normal-sized video projects without requiring a backend service.
+
+---
+
+# 20. Key Architectural Decision
+
+The most important architectural decision is to make the application **fully client-side**.
+
+The browser owns the complete workflow:
+
+```text
+                 LOCAL DEVICE
+                     |
+             +-------+-------+
+             |               |
+         Input Files      Output File
+             |               ^
+             v               |
+       +---------------------------+
+       |       Web Application     |
+       |                           |
+       |  UI                      |
+       |  Application State       |
+       |  Video Processing        |
+       |  FFmpeg/WebAssembly      |
+       +---------------------------+
+```
+
+This provides a simple deployment model, strong privacy characteristics, and no infrastructure costs for video storage or server-side video processing.
+
+The main technical risk is browser resource consumption. Video stitching can require substantial CPU, memory, and temporary storage, especially for large or high-resolution files. The implementation should therefore prioritize streaming/chunked processing where possible and move expensive processing away from the main UI thread.
