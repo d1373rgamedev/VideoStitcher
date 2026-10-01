@@ -505,17 +505,22 @@ export async function addBackgroundMusic(
   }
   ffmpegInstance.on('progress', progressHandler)
 
-  await ffmpegInstance.exec([
-    '-i', videoPath,
-    '-i', musicPath,
-    '-filter_complex', filterComplex,
-    ...mapArgs,
-    '-c:v', 'copy',
-    '-pix_fmt', 'yuv420p',
-    '-t', String(duration),
-    '-movflags', '+faststart',
-    outputPath
-  ])
+  let execError: unknown = null
+  try {
+    await ffmpegInstance.exec([
+      '-i', videoPath,
+      '-i', musicPath,
+      '-filter_complex', filterComplex,
+      ...mapArgs,
+      '-c:v', 'copy',
+      '-pix_fmt', 'yuv420p',
+      '-t', String(duration),
+      '-movflags', '+faststart',
+      outputPath
+    ])
+  } catch (err) {
+    execError = err
+  }
 
   ffmpegInstance.off('progress', progressHandler)
   ffmpegInstance.off('log', logHandler)
@@ -526,7 +531,8 @@ export async function addBackgroundMusic(
   try {
     outputData = await ffmpegInstance.readFile(outputPath)
   } catch {
-    throw new Error('Failed to read output file')
+    const detail = execError instanceof Error ? execError.message : String(execError)
+    throw new Error(`Failed to read output file${execError ? `: ${detail}` : ''}`)
   }
 
   if (!outputData || outputData.length === 0) {
@@ -675,21 +681,26 @@ export async function stitchOverlay(
 
   const overlayInputArgs = isImage ? ['-loop', '1'] : []
 
-  await ffmpegInstance.exec([
-    '-i', mainPath,
-    ...overlayInputArgs,
-    '-i', overlayPath,
-    '-filter_complex', filterComplex,
-    '-map', '[out]',
-    ...audioArgs,
-    ...durationArgs,
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '23',
-    '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart',
-    outputPath
-  ])
+  let execError: unknown = null
+  try {
+    await ffmpegInstance.exec([
+      '-i', mainPath,
+      ...overlayInputArgs,
+      '-i', overlayPath,
+      '-filter_complex', filterComplex,
+      '-map', '[out]',
+      ...audioArgs,
+      ...durationArgs,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      outputPath
+    ])
+  } catch (err) {
+    execError = err
+  }
 
   ffmpegInstance.off('progress', progressHandler)
   ffmpegInstance.off('log', logHandler)
@@ -700,7 +711,8 @@ export async function stitchOverlay(
   try {
     outputData = await ffmpegInstance.readFile(outputPath)
   } catch {
-    throw new Error('Failed to read output file')
+    const detail = execError instanceof Error ? execError.message : String(execError)
+    throw new Error(`Failed to read output file${execError ? `: ${detail}` : ''}`)
   }
 
   if (!outputData || outputData.length === 0) {
@@ -781,20 +793,25 @@ export async function stitchSideBySide(
   const filterComplex =
     `[0:v]scale=-2:${leftHeight}[v0];[1:v]scale=-2:${leftHeight}[v1];[v0][v1]hstack=inputs=2:shortest=1[vout]`
 
-  await ffmpegInstance.exec([
-    '-i', leftPath,
-    '-i', rightPath,
-    '-filter_complex', filterComplex,
-    '-map', '[vout]',
-    '-map', '0:a?',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '23',
-    '-c:a', 'copy',
-    '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart',
-    outputPath
-  ])
+  let execError: unknown = null
+  try {
+    await ffmpegInstance.exec([
+      '-i', leftPath,
+      '-i', rightPath,
+      '-filter_complex', filterComplex,
+      '-map', '[vout]',
+      '-map', '0:a?',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-c:a', 'copy',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      outputPath
+    ])
+  } catch (err) {
+    execError = err
+  }
 
   ffmpegInstance.off('progress', progressHandler)
   ffmpegInstance.off('log', logHandler)
@@ -805,7 +822,8 @@ export async function stitchSideBySide(
   try {
     outputData = await ffmpegInstance.readFile(outputPath)
   } catch {
-    throw new Error('Failed to read output file')
+    const detail = execError instanceof Error ? execError.message : String(execError)
+    throw new Error(`Failed to read output file${execError ? `: ${detail}` : ''}`)
   }
 
   if (!outputData || outputData.length === 0) {
