@@ -18,6 +18,8 @@ Video Stitcher is a client-side video editing web application. It uses [FFmpeg.w
 
 Built with React and TypeScript, it provides a drag-and-drop interface for arranging video clips, applying transitions, adding overlays and text, and exporting the result as an MP4 file.
 
+https://github.com/user-attachments/assets/7a79b571-636e-4fd0-85d3-5b782cd3ebbe
+
 ## Tech Stack
 
 | Technology | Purpose |
